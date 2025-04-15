@@ -1,0 +1,92 @@
+#:set dim = getvar('dim', 3)
+
+#:if dim == 3
+
+#:set ijk = 'i, j, k'
+
+#:def volume(s1, s2, s3)
+k = 1, ${s1}$; do j = 1, ${s2}$; do i = 1, ${s3}$
+#:enddef
+
+#:def endvolume()
+; end do; end do
+#:enddef
+
+#:def dim_times(x)
+${x}$, ${x}$, ${x}$
+#:enddef
+
+#:elif dim == 2
+
+#:set ijk = 'i, j'
+
+#:def volume(s1, s2, *s3)
+j = 1, ${s1}$; do i = 1, ${s2}$
+#:enddef
+
+#:def endvolume()
+; end do
+#:enddef
+
+#:def dim_times(x)
+${x}$, ${x}$
+#:enddef
+
+#:else
+
+#:stop 'Unsupported dimension: {}'.format(dim)
+
+#:endif
+
+
+program randlen
+    use, intrinsic :: iso_fortran_env
+    use, intrinsic :: iso_c_binding
+    implicit none
+
+    real(kind=real64), parameter :: twopi = 8. * atan(1.)
+    integer, parameter :: n = 100
+
+    integer :: i, j, k
+    real(kind=real64), allocatable :: points(:, @{dim_times(:)}@)
+    real(kind=real64), allocatable :: lengths(@{dim_times(:)}@)
+    real(kind=real64) :: avg_length = 0.d0
+    
+    allocate(points(3, @{dim_times(n)}@))
+    allocate(lengths(@{dim_times(n)}@))
+
+    call box_muller(points)
+
+    !$omp parallel do private(i, j, k) shared(points, lengths) reduction(+:avg_length) collapse(${dim}$)
+    do @{volume(n, n, n)}@
+        lengths(${ijk}$) = sqrt(sum(points(:, ${ijk}$)**2))
+        avg_length = avg_length + lengths(${ijk}$)
+    end do @{endvolume()}@ 
+    !$omp end parallel do
+
+    print *, "average length:", avg_length / size(lengths)
+
+contains
+
+    subroutine box_muller(out)
+        integer :: n, i
+        real(kind=real64), target, intent(inout) :: out(..)
+        real(kind=real64), pointer :: out_2d(:, :)
+        real(kind=real64) :: u(2), r
+
+        n = size(out) / 2
+        ! really ugly way to create [2, n] view of array `out`
+        call c_f_pointer(c_loc(out), out_2d, [2, n])
+
+        !$omp parallel do private(u, r) shared(n)
+        do i = 1, n
+            call random_number(u)
+            r = sqrt(-2.d0 * log(u(1)))
+            out_2d(1, i) = r * cos(twopi * u(2))
+            out_2d(2, i) = r * sin(twopi * u(2))
+        end do
+        !$omp end parallel do
+    end subroutine
+
+end program
+!vim:sw=4:ts=4

@@ -2,9 +2,10 @@
 .PHONY: all update-symlink clean clean-all
 
 target ?= GNU
+dim ?= 3
 sort_enable := $(sort $(enable))
 
-hash := $(shell printf '%s' "$(sort_enable)" | md5sum | cut -c1-8)
+hash := $(shell printf '%s' "$(dim) $(sort_enable)" | md5sum | cut -c1-8)
 build_dir = build/$(target)-$(hash)
 
 ifeq ($(target), GNU)
@@ -40,14 +41,16 @@ $(info Selected modules: [$(sort_enable)])
 $(info Config hash: $(hash))
 $(info Build directory: $(build_dir))
 
-sources := $(wildcard src/*.fpp)
+sources := $(wildcard src/*.fypp)
 $(info Source files: $(sources))
 
-obj_files := $(sources:src/%.fpp=$(build_dir)/obj/%.o)
+obj_files := $(sources:src/%.fypp=$(build_dir)/obj/%.o)
 $(info Object files: $(obj_files))
 
 # enable line numbering markers
 fypp_flags += -n
+# set the dimension
+fypp_flags += -Ddim=$(dim)
 # forward `enable` parameter
 fypp_flags += $(foreach flag,$(sort_enable),-D$(flag))
 
@@ -86,7 +89,7 @@ $(build_dir)/randlen: $(obj_files)
 
 .PRECIOUS: $(build_dir)/f90/%.f90
 
-$(build_dir)/f90/%.f90: src/%.fpp
+$(build_dir)/f90/%.f90: src/%.fypp
 > @mkdir -p $(@D)
 > @echo -e "Preprocessing \\e[1;32m$<\\e[m"
 > @fypp $(fypp_flags) $< $@
